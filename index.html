@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Mi TV Station</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      background: linear-gradient(135deg, #0f0f0f, #1a1a1a);
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      color: #fff;
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 2.5em;
+      background: linear-gradient(90deg, #00fff0, #ff00f0);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-shadow: 0 0 20px #00fff0aa;
+      margin-bottom: 20px;
+    }
+
+    select, input, button, textarea {
+      font-size: 16px;
+      margin-top: 10px;
+      padding: 10px;
+      border-radius: 8px;
+      border: none;
+      outline: none;
+      box-shadow: 0 0 5px rgba(255,255,255,0.2);
+      display: block;
+      width: 100%;
+      max-width: 500px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    video {
+      display: block;
+      margin: 20px auto;
+      border-radius: 12px;
+      box-shadow: 0 0 25px #00ffc3aa;
+      width: 80%;
+      max-width: 720px;
+    }
+
+    .tv-floating {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 10000;
+      background: #000;
+      border: 2px solid #00ffc3aa;
+      border-radius: 12px;
+      box-shadow: 0 0 25px #00ffc3aa;
+      width: 300px;
+    }
+
+    .tv-floating video {
+      width: 100%;
+      border-radius: 23px;
+    }
+
+    button {
+      background: linear-gradient(90deg, #00c3ff, #ff3cac);
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    button:hover {
+      transform: scale(1.05);
+    }
+  </style>
+</head>
+<body>
+  <h1>📺 Mi TV Station</h1>
+
+  <div class="tv-floating">
+    <video id="videoPlayer" controls autoplay></video>
+  </div>
+
+  <div id="channelList" style="max-height: 400px; overflow-y: auto;"></div>
+
+  <button onclick="startRandomPreviewLoop()">▶️ Reproducir selección aleatoria</button>
+  <button onclick="playSelectedChannel()">▶️ Ver canal seleccionado</button>
+  <input type="file" accept=".json,.m3u" id="playlistFile" />
+
+  <h3>Guardar Playlist Personalizada</h3>
+  <input id="playlistName" placeholder="Nombre de la playlist" />
+  <button onclick="savePlaylist()">💾 Guardar</button>
+
+  <h3 style="margin-top: 20px;">Playlists Guardadas</h3>
+  <select id="savedPlaylists" onchange="loadSavedPlaylist(this.value)">
+    <option value="">Selecciona una lista...</option>
+  </select>
+  <button onclick="deleteSelectedPlaylist()">🗑️ Eliminar Playlist</button>
+  <button onclick="exportPlaylist()">⬇️ Exportar Playlist</button>
+
+  <script>
+let canalesSeleccionados = [];
+
+
+
+    const video = document.getElementById('videoPlayer');
+    const dropdown = document.getElementById('channelDropdown');
+    const savedPlaylistsDropdown = document.getElementById('savedPlaylists');
+    const fileInput = document.getElementById('playlistFile');
+
+    let playlist = [];
+
+    const canalesAdultos = [...Array(10000)].map((_, i) => ({
+      name: `🔞 Canal ${i + 1}`,
+      url: `https://vod.mycamtv.net/${i + 1}.m3u8`
+    }));
+
+    window.addEventListener("DOMContentLoaded", () => {
+      const botonAdultos = document.createElement("button");
+      botonAdultos.textContent = "🔞 Mostrar Canales para Adultos";
+      botonAdultos.style.marginTop = "30px";
+      botonAdultos.style.background = "linear-gradient(90deg, #ff416c, #ff4b2b)";
+      botonAdultos.style.color = "#fff";
+      botonAdultos.style.fontWeight = "bold";
+
+      botonAdultos.onclick = () => {
+        const claveIngresada = prompt("🔐 Ingresa la clave de acceso:");
+        const claveCifrada = "Y2xhdmUxMjM=";
+        if (btoa(claveIngresada) === claveCifrada) {
+          playlist = [...canalesAdultos];
+          populateDropdown(true);
+          alert("✅ Acceso concedido. Canales cargados.");
+          botonAdultos.disabled = true;
+          botonAdultos.textContent = "🔒 Acceso concedido";
+        } else {
+          alert("❌ Clave incorrecta.");
+        }
+      };
+
+      document.body.appendChild(botonAdultos);
+    });
+
+    fileInput.addEventListener('change', (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+
+      reader.onload = (e) => {
+        try {
+          const fileContent = e.target.result;
+
+          if (file.name.endsWith('.json')) {
+            const data = JSON.parse(fileContent);
+            if (!Array.isArray(data)) throw new Error('Formato inválido');
+            playlist = data;
+          } else if (file.name.endsWith('.m3u')) {
+  const lines = fileContent.split('\n');
+  playlist = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].startsWith('#EXTINF')) {
+      const infoLine = lines[i];
+      const name = infoLine.split(',').pop().trim();
+      const url = lines[i + 1]?.trim();
+      const logoMatch = infoLine.match(/tvg-logo="(.*?)"/);
+      const logo = logoMatch ? logoMatch[1] : '';
+
+      if (url && url.startsWith('http')) {
+        playlist.push({ name, url, logo });
+      }
+    }
+  }
+
+  if (playlist.length === 0) throw new Error('No se encontraron canales en el archivo .m3u');
+}
+
+ else {
+            throw new Error('Formato de archivo no soportado');
+          }
+
+          populateDropdown(true);
+        } catch (err) {
+          alert('⚠️ Error al cargar la lista:\n' + err.message);
+        }
+      };
+
+      reader.readAsText(file);
+    });
+
+    function savePlaylist() {
+  const name = document.getElementById('playlistName').value.trim();
+  if (!name) return alert('Escribe un nombre para la playlist');
+  if (canalesSeleccionados.length === 0) return alert('Selecciona al menos un canal haciendo clic en la lista');
+
+  localStorage.setItem(`playlist_${name}`, JSON.stringify(canalesSeleccionados));
+  loadAllPlaylists();
+  alert('Playlist guardada exitosamente');
+}
+
+
+    function loadAllPlaylists() {
+      savedPlaylistsDropdown.innerHTML = '<option value="">Selecciona una lista...</option>';
+      Object.keys(localStorage).forEach(key => {
+        if (key.startsWith('playlist_')) {
+          const name = key.replace('playlist_', '');
+          const option = document.createElement('option');
+          option.value = name;
+          option.textContent = name;
+          savedPlaylistsDropdown.appendChild(option);
+        }
+      });
+    }
+
+    function loadSavedPlaylist(name) {
+      if (!name) return;
+      const saved = localStorage.getItem(`playlist_${name}`);
+      if (saved) {
+        playlist = JSON.parse(saved);
+        populateDropdown(true);
+      }
+    }
+
+    async function checkStreamStatus(url, timeout = 60000) {
+      return new Promise(resolve => {
+        const video = document.createElement('video');
+        let settled = false;
+
+        const timer = setTimeout(() => {
+          if (!settled) {
+            settled = true;
+            video.src = "";
+            resolve('off');
+          }
+        }, timeout);
+
+        video.src = url;
+        video.muted = true;
+
+        video.play().then(() => {
+          if (!settled) {
+            clearTimeout(timer);
+            settled = true;
+            video.play();
+            resolve('live');
+          }
+        }).catch(() => {
+          if (!settled) {
+            clearTimeout(timer);
+            settled = true;
+            resolve('off');
+          }
+        });
+      });
+    }
+
+    async function populateDropdown(verify = false) {
+  const container = document.getElementById("channelList");
+  container.innerHTML = '';
+
+  if (!verify) {
+    for (const channel of playlist) {
+      const item = crearCanalVisual(channel);
+      container.appendChild(item);
+    }
+    return;
+  }
+
+  const batchSize = 40;
+  const delayBetweenBatches = 10 * 60 * 1000;
+
+  let currentIndex = 0;
+
+  async function verificarLote() {
+    const lote = playlist.slice(currentIndex, currentIndex + batchSize);
+
+    for (const channel of lote) {
+      const status = await checkStreamStatus(channel.url);
+      channel.status = status;
+      const item = crearCanalVisual(channel);
+      container.appendChild(item);
+    }
+
+    currentIndex += batchSize;
+
+    if (currentIndex < playlist.length) {
+      console.log("⏳ Esperando 10 minutos para el siguiente lote...");
+      setTimeout(verificarLote, delayBetweenBatches);
+    } else {
+      console.log("✅ Verificación completa.");
+    }
+  }
+
+  verificarLote();
+}
+
+
+function previewFromMiddle(url) {
+  video.pause();
+  video.src = url;
+  video.muted = true; // ✅ para que el autoplay funcione
+  video.load();
+
+  video.addEventListener("loadedmetadata", function handler() {
+    video.removeEventListener("loadedmetadata", handler);
+
+    if (!isNaN(video.duration) && video.duration > 0) {
+      video.currentTime = video.duration / 2;
+    }
+
+    video.play().catch(err => {
+      console.warn("⚠️ No se pudo hacer autoplay:", err);
+      // Intenta sin muted si falla
+      video.muted = false;
+      video.play().catch(() => {
+        console.warn("❌ Necesita interacción manual.");
+      });
+    });
+
+    setTimeout(() => video.pause(), 60000); // pausa tras 1 minuto
+  });
+}
+
+
+
+    function startRandomPreviewLoop() {
+  if (canalesSeleccionados.length === 0) {
+    alert('Selecciona uno o más canales haciendo clic en ellos.');
+    return;
+  }
+
+  let currentIndex = 0;
+
+  function playNext() {
+    if (stopRandomPreview) return;
+    const current = canalesSeleccionados[currentIndex];
+    previewFromMiddle(current.url);
+    currentIndex = (currentIndex + 1) % canalesSeleccionados.length;
+    randomLoopTimeout = setTimeout(playNext, 60000);
+  }
+
+  stopRandomPreview = false;
+  playNext();
+}
+
+
+
+    let stopRandomPreview = false;
+
+    function stopRandomPreviewLoop() {
+      stopRandomPreview = true;
+      clearTimeout(randomLoopTimeout);
+      video.play();
+    }
+
+   
+    
+    function crearCanalVisual(channel) {
+  const div = document.createElement("div");
+  div.className = "canal";
+  div.style.display = "flex";
+  div.style.alignItems = "center";
+  div.style.gap = "10px";
+  div.style.marginBottom = "10px";
+  div.style.cursor = "pointer";
+  div.style.background = "#222";
+  div.style.padding = "10px";
+  div.style.borderRadius = "10px";
+
+  const img = document.createElement("img");
+  img.src = channel.logo || "https://via.placeholder.com/50x50?text=📺";
+  img.alt = "logo";
+  img.style.width = "50px";
+  img.style.height = "50px";
+  img.style.borderRadius = "6px";
+  img.style.objectFit = "cover";
+
+  const text = document.createElement("span");
+  text.textContent = channel.name + (channel.status === 'live' ? ' ✅' : channel.status === 'off' ? ' ❌' : '');
+  text.style.color = channel.status === 'live' ? '#00ff00' : '#fff';
+
+  div.appendChild(img);
+  div.appendChild(text);
+
+  div.onclick = () => {
+    previewFromMiddle(channel.url);
+
+    // Seleccionar/deseleccionar canal para guardar o aleatorio
+    const existe = canalesSeleccionados.find(c => c.url === channel.url);
+    if (existe) {
+      canalesSeleccionados = canalesSeleccionados.filter(c => c.url !== channel.url);
+      div.style.outline = "none";
+    } else {
+      canalesSeleccionados.push(channel);
+      div.style.outline = "2px solid #00c3ff";
+    }
+  };
+
+  return div;
+}
+
+
+  </script>
+</body>
+</html>
